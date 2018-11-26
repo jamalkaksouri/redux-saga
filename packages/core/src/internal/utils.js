@@ -63,12 +63,12 @@ export function makeIterator(next, thro = kThrow, name = 'iterator') {
   return iterator
 }
 
-export function logError(error) {
+export function logError(error, { sagaStack }) {
   /*eslint-disable no-console*/
   console.error(error)
 
-  if (error && error.sagaStack) {
-    console.error(error.sagaStack)
+  if (sagaStack) {
+    console.error(sagaStack)
   }
 }
 
@@ -136,13 +136,13 @@ export function createAllStyleChildCallbacks(shape, parentCallback) {
   }
 
   keys.forEach(key => {
-    const chCbAtKey = (res, isErr) => {
+    const chCbAtKey = (res, isErr, sagaErrorStack) => {
       if (completed) {
         return
       }
       if (isErr || shouldComplete(res)) {
         parentCallback.cancel()
-        parentCallback(res, isErr)
+        parentCallback(res, isErr, sagaErrorStack)
       } else {
         results[key] = res
         completedCount++

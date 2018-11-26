@@ -5,6 +5,7 @@ import effectRunnerMap from './effectRunnerMap'
 import resolvePromise from './resolvePromise'
 import nextEffectId from './uid'
 import { asyncIteratorSymbol, noop, shouldCancel, shouldTerminate } from './utils'
+import { SagaErrorStack } from './error-utils'
 import newTask from './newTask'
 
 export default function proc(env, iterator, parentContext, parentEffectId, meta, isRoot, cont) {
@@ -62,7 +63,7 @@ export default function proc(env, iterator, parentContext, parentEffectId, meta,
     It's a recursive async/continuation function which calls itself
     until the generator terminates or throws
   **/
-  function next(arg, isErr) {
+  function next(arg, isErr, sagaErrorStack) {
     try {
       let result
       if (isErr) {
@@ -108,7 +109,7 @@ export default function proc(env, iterator, parentContext, parentEffectId, meta,
         throw error
       }
       mainTask.status = ABORTED
-      mainTask.cont(error, true)
+      mainTask.cont(error, true, sagaErrorStack || new SagaErrorStack())
     }
   }
 
@@ -154,7 +155,7 @@ export default function proc(env, iterator, parentContext, parentEffectId, meta,
     let effectSettled
 
     // Completion callback passed to the appropriate effect runner
-    function currCb(res, isErr) {
+    function currCb(res, isErr, sagaErrorStack) {
       if (effectSettled) {
         return
       }
@@ -168,10 +169,8 @@ export default function proc(env, iterator, parentContext, parentEffectId, meta,
           env.sagaMonitor.effectResolved(effectId, res)
         }
       }
-      if (isErr) {
-        task.crashedEffect = effect
-      }
-      cb(res, isErr)
+      const isEffectRunnerError = isErr && !sagaErrorStack
+      cb(res, isErr, isEffectRunnerError ? new SagaErrorStack(effect) : sagaErrorStack)
     }
     // tracks down the current cancel
     currCb.cancel = noop

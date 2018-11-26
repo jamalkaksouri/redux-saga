@@ -3,13 +3,13 @@ import * as is from '@redux-saga/is'
 import { TASK, TASK_CANCEL } from '@redux-saga/symbols'
 import { RUNNING, CANCELLED, ABORTED, DONE } from './task-status'
 import { assignWithSymbols, check, createSetContextWarning } from './utils'
-import { addSagaStack, sagaStackToString } from './error-utils'
 import forkQueue from './forkQueue'
 
 export default function newTask(env, mainTask, parentContext, parentEffectId, meta, isRoot, cont) {
   let status = RUNNING
   let taskResult
   let taskError
+  let taskErrorStack
   let deferredEnd = null
 
   const cancelledDueToErrorTasks = []
@@ -43,7 +43,7 @@ export default function newTask(env, mainTask, parentContext, parentEffectId, me
     }
   }
 
-  function end(result, isErr) {
+  function end(result, isErr, sagaErrorStack) {
     if (!isErr) {
       // The status here may be RUNNING or CANCELLED
       // If the status is CANCELLED, then we do not need to change it here
@@ -54,23 +54,19 @@ export default function newTask(env, mainTask, parentContext, parentEffectId, me
       deferredEnd && deferredEnd.resolve(result)
     } else {
       status = ABORTED
-      addSagaStack(result, {
+      sagaErrorStack.add({
         meta,
-        effect: task.crashedEffect,
         cancelledTasks: cancelledDueToErrorTasks,
       })
 
       if (task.isRoot) {
-        if (result && result.sagaStack) {
-          result.sagaStack = sagaStackToString(result.sagaStack)
-        }
-
-        env.onError(result)
+        env.onError(result, { sagaStack: sagaErrorStack.toString() })
       }
       taskError = result
+      taskErrorStack = sagaErrorStack
       deferredEnd && deferredEnd.reject(result)
     }
-    task.cont(result, isErr)
+    task.cont(result, isErr, sagaErrorStack)
     task.joiners.forEach(j => j.cb(result, isErr))
     task.joiners = null
   }
@@ -122,6 +118,7 @@ export default function newTask(env, mainTask, parentContext, parentEffectId, me
     isAborted: () => status === ABORTED,
     result: () => taskResult,
     error: () => taskError,
+    sagaErrorStack: () => taskErrorStack,
   }
 
   return task

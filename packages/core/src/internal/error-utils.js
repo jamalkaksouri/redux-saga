@@ -52,9 +52,9 @@ function cancelledTasksAsString(sagaStack) {
         created by fetchSaga {pathToFile}
         created by rootSaga {pathToFile}
 */
-export function sagaStackToString(sagaStack) {
+function sagaStackToString(sagaStack, crashedEffect) {
   const [firstSaga, ...otherSagas] = sagaStack
-  const crashedEffectLocation = firstSaga.effect ? effectLocationAsString(firstSaga.effect) : null
+  const crashedEffectLocation = crashedEffect ? effectLocationAsString(crashedEffect) : null
   const errorMessage = `The above error occurred in task ${sagaLocationAsString(firstSaga.meta)}${
     crashedEffectLocation ? ` \n when executing effect ${crashedEffectLocation}` : ''
   }`
@@ -66,19 +66,15 @@ export function sagaStackToString(sagaStack) {
   ].join('\n')
 }
 
-export function addSagaStack(errorObject, errorStack) {
-  if (typeof errorObject === 'object') {
-    if (typeof errorObject.sagaStack === 'undefined') {
-      // property is used as a stack of descriptors for failed sagas
-      // after formatting to string it will be re-written
-      // to pass sagaStack as a string in user land
-      Object.defineProperty(errorObject, 'sagaStack', {
-        value: [],
-        writable: true,
-        enumerable: false,
-      })
-    }
-
-    errorObject.sagaStack.push(errorStack)
+export class SagaErrorStack {
+  constructor(crashedEffect) {
+    this.crashedEffect = crashedEffect
+    this.sagaStack = []
+  }
+  add(errorStack) {
+    this.sagaStack.push(errorStack)
+  }
+  toString() {
+    return sagaStackToString(this.sagaStack, this.crashedEffect)
   }
 }
